@@ -1,13 +1,17 @@
 var express = require('express'),
 	bodyParser = require('body-parser'),
+	multiparty = require("connect-multiparty"),
 	mongodb = require('mongodb'),
-	objectId = require('mongodb').ObjectId;
+	objectId = require('mongodb').ObjectId,
+	fs = require('fs'),
+	fsx = require('fs-extra');
 
 var app = express();
 
 //body-parser
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(multiparty());
 
 var port = 7002;
 
@@ -29,20 +33,40 @@ app.get('', function(req, res){
 //POST
 app.post('/api', function(req, res){
 
-	var dados = req.body;
+	res.setHeader("Access-Control-Allow-Origin", "*");
 
-	db.open( function(err, mongoclient){
-		mongoclient.collection('postagens', function(err, collection){
-			collection.insert(dados, function(err, records){
-				if(err){
-					res.json({'status' : 'erro'});
-				}else{
-					res.json({'status' : 'registro inserido'});
-				}
-				mongoclient.close();
-				});
-			});
-		});
+    var date = new Date();
+    var time_stamp = date.getTime();
+
+    var url_imagem = time_stamp + '_' + req.files.arquivo.originalFilename;
+    var path_origem = req.files.arquivo.path;
+    var path_destino = './uploads/' + url_imagem;
+
+    fsx.move(path_origem, path_destino, function(err){
+        if(err){
+            res.status(500).json({ error : err });
+            return;
+        }
+
+        var dados = {
+            url_imagem: url_imagem,
+            titulo: req.body.titulo
+        }
+
+        db.open(function(err, mongoclient){
+            mongoclient.collection('postagens', function(err, collection){
+                collection.insert(dados, function(err, records){
+                    if(err){
+                        res.json({'status': 'erro'});
+                    }else{
+                        res.json({'status': 'inclusao realizada com sucesso'});
+                    }
+                    mongoclient.close();
+                });
+            });
+        });
+
+    });
 });
 //GET ALL
 app.get('/api', function(req, res){
@@ -69,7 +93,7 @@ app.get('/api/:id', function(req, res){
 				if(err){
 					res.json(err);
 				}else {
-					res.json(results);
+					res.status(200).json(results);
 				}
 				mongoclient.close();
 				});
@@ -100,6 +124,7 @@ app.put('/api/:id', function(req, res){
 		});
 	});
 
+//DELETE by ID
 app.delete('/api/:id', function(req, res){
 	
 	db.open( function(err, mongoclient){
